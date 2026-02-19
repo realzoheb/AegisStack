@@ -55,7 +55,7 @@ Everything runs **100% locally**. No data leaves your machine.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/hybrid-ai-agent.git
+git clone https://github.com/divyanshakya966/DevSecOps-AI-Agent.git
 cd hybrid-ai-agent
 
 # 2. Create virtual environment

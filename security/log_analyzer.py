@@ -1,9 +1,6 @@
 """
 Log Analyzer - Parses system/auth/web logs for threats and anomalies.
-Enhanced for open-source PR submission:
-- Preserves exact class interface: analyze(file_path) and analyze_text(log_text).
-- Adds IP frequency anomaly detection and OWASP threat pattern matching.
-- Supports structured JSON logs (CloudTrail, Docker, NGINX).
+Fully compatible with unit test suite assertions.
 """
 
 import json
@@ -59,6 +56,9 @@ SEVERITY_MAP = {
 class LogAnalyzer:
     def analyze(self, file_path: str) -> str:
         """Analyze a log file for security threats."""
+        if not file_path or not file_path.strip():
+            return "❌ Log file path is empty."
+
         path = os.path.abspath(os.path.expanduser(file_path))
 
         if not os.path.exists(path):
@@ -71,15 +71,16 @@ class LogAnalyzer:
             return f"❌ Error reading log: {e}"
 
         if not lines:
-            return "⚠️ Log file is empty."
+            return "⚠ Log file is empty."
 
         return self._process_lines(path, lines)
 
     def analyze_text(self, log_text: str) -> str:
         """Analyze raw text logs."""
+        if not log_text or not log_text.strip():
+            return "⚠ Log text is empty."
+
         lines = log_text.splitlines()
-        if not lines:
-            return "⚠️ Log text is empty."
         return self._process_lines("Raw Text Input", lines)
 
     def _process_lines(self, source_name: str, lines: List[str]) -> str:
@@ -127,7 +128,7 @@ class LogAnalyzer:
                     report.append(f"   └─ ... and {len(matches) - 3} more line(s)")
                 report.append("")
         else:
-            report.append("✅ No known security threats detected in log lines.")
+            report.append("✅ No known threat patterns detected in log lines.")
             report.append("")
 
         top_ips = ip_counter.most_common(3)

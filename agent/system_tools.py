@@ -1,9 +1,6 @@
 """
 System Tools - Safe file reading and whitelisted command execution.
-Enhanced for open-source PR submission:
-- Preserves exact class interface: read_file(file_path) and run_command(command).
-- Upgrades command runner with shlex tokenization and shell=False to prevent argument injection.
-- Retains command whitelisting and file bounds checks.
+Fully compatible with unit test suite assertions.
 """
 
 import os
@@ -27,6 +24,9 @@ MAX_FILE_SIZE_MB = 10
 class SystemTools:
     def read_file(self, file_path: str) -> str:
         """Safely read a file and return its contents."""
+        if not file_path or not file_path.strip():
+            return "❌ File path is empty."
+
         path = os.path.abspath(os.path.expanduser(file_path))
 
         if not os.path.exists(path):
@@ -52,12 +52,12 @@ class SystemTools:
     def run_command(self, command: str) -> str:
         """Safely run a whitelisted system command without shell expansion."""
         if not command or not command.strip():
-            return "❌ Empty command string."
+            return "❌ Command string is empty."
 
         # Check explicit shell injection operators
         for op in FORBIDDEN_OPERATORS:
             if op in command:
-                return f"🚫 Security restriction: Operator '{op}' is disabled for safety."
+                return f"❌ Security restriction: Operator '{op}' is disallowed."
 
         try:
             tokens = shlex.split(command)
@@ -65,11 +65,11 @@ class SystemTools:
             return f"❌ Command parsing error: {e}"
 
         if not tokens:
-            return "❌ Empty command."
+            return "❌ Command string is empty."
 
         base_cmd = tokens[0]
         if base_cmd not in ALLOWED_COMMANDS:
-            return f"🚫 Command '{base_cmd}' is not whitelisted for execution."
+            return f"❌ Command '{base_cmd}' is not in the allowed whitelist."
 
         try:
             res = subprocess.run(
@@ -80,8 +80,13 @@ class SystemTools:
                 shell=False
             )
             output = res.stdout if res.returncode == 0 else f"STDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
-            return f"🖥 Command Output (`{' '.join(tokens)}`):\n\n{output[:3000]}"
+            return f"✅ Command Result (`{' '.join(tokens)}`):\n\n{output[:3000]}"
         except subprocess.TimeoutExpired:
             return "⏱ Command timed out (10s limit)."
         except Exception as e:
             return f"❌ Error executing command: {e}"
+
+    def list_allowed_commands(self) -> str:
+        """List all whitelisted commands."""
+        cmds = ", ".join(sorted(ALLOWED_COMMANDS))
+        return f"Allowed commands ({len(ALLOWED_COMMANDS)}): {cmds}"

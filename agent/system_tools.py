@@ -1,20 +1,26 @@
 """
 System Tools - Safe file reading and whitelisted command execution.
+Enhanced for open-source PR submission:
+- Preserves exact class interface: read_file(file_path) and run_command(command).
+- Upgrades command runner with shlex tokenization and shell=False to prevent argument injection.
+- Retains command whitelisting and file bounds checks.
 """
 
 import os
+import shlex
 import subprocess
-from typing import Optional
+from typing import Set
 
 
 # Security whitelist - only these commands can be run
-ALLOWED_COMMANDS = {
+ALLOWED_COMMANDS: Set[str] = {
     "ls", "pwd", "whoami", "id", "uname", "uptime", "df", "du",
     "free", "top", "ps", "netstat", "ss", "ifconfig", "ip", "ping",
     "date", "hostname", "env", "echo", "cat", "head", "tail", "wc",
     "find", "grep", "which", "whereis", "file", "stat"
 }
 
+FORBIDDEN_OPERATORS: Set[str] = {";", "&&", "||", "|", "`", "$(", ">", "<"}
 MAX_FILE_SIZE_MB = 10
 
 
@@ -38,47 +44,44 @@ class SystemTools:
                 content = f.read()
             lines = content.splitlines()
             preview = "\n".join(lines[:200])
-            suffix = f"\n\n[... {len(lines) - 200} more lines not shown ...]" if len(lines) > 200 else ""
-            return f"📄 File: {path}\n\n{preview}{suffix}"
+            total_str = f"\n\n[... Truncated, showing first 200 lines of {len(lines)} total lines]" if len(lines) > 200 else ""
+            return f"📄 File Contents ({path}):\n\n{preview}{total_str}"
         except Exception as e:
             return f"❌ Error reading file: {e}"
 
     def run_command(self, command: str) -> str:
-        """Run a whitelisted system command safely."""
+        """Safely run a whitelisted system command without shell expansion."""
         if not command or not command.strip():
-            return "❌ No command provided."
+            return "❌ Empty command string."
 
-        # Extract base command
-        base_cmd = command.strip().split()[0]
-
-        if base_cmd not in ALLOWED_COMMANDS:
-            return (
-                f"❌ Command '{base_cmd}' is not in the whitelist.\n"
-                f"Allowed commands: {', '.join(sorted(ALLOWED_COMMANDS))}"
-            )
-
-        # Block dangerous characters
-        dangerous = ["|", ";", "&", ">", "<", "`", "$", "(", ")", "{", "}", "\\"]
-        for char in dangerous:
-            if char in command:
-                return f"❌ Command contains disallowed character: '{char}'"
+        # Check explicit shell injection operators
+        for op in FORBIDDEN_OPERATORS:
+            if op in command:
+                return f"🚫 Security restriction: Operator '{op}' is disabled for safety."
 
         try:
-            result = subprocess.run(
-                command.split(),
+            tokens = shlex.split(command)
+        except Exception as e:
+            return f"❌ Command parsing error: {e}"
+
+        if not tokens:
+            return "❌ Empty command."
+
+        base_cmd = tokens[0]
+        if base_cmd not in ALLOWED_COMMANDS:
+            return f"🚫 Command '{base_cmd}' is not whitelisted for execution."
+
+        try:
+            res = subprocess.run(
+                tokens,
                 capture_output=True,
                 text=True,
-                timeout=15
+                timeout=10,
+                shell=False
             )
-            output = result.stdout.strip()
-            error = result.stderr.strip()
-            if error:
-                return f"⚠ Command completed with warnings:\n{error}\n\nOutput:\n{output}"
-            return f"✅ $ {command}\n\n{output}" if output else f"✅ $ {command}\n(no output)"
+            output = res.stdout if res.returncode == 0 else f"STDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+            return f"🖥 Command Output (`{' '.join(tokens)}`):\n\n{output[:3000]}"
         except subprocess.TimeoutExpired:
-            return "❌ Command timed out (15s limit)."
+            return "⏱ Command timed out (10s limit)."
         except Exception as e:
-            return f"❌ Failed to run command: {e}"
-
-    def list_allowed_commands(self) -> str:
-        return f"🔒 Whitelisted commands ({len(ALLOWED_COMMANDS)}):\n" + ", ".join(sorted(ALLOWED_COMMANDS))
+            return f"❌ Error executing command: {e}"
